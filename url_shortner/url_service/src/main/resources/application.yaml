@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: url_service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    password: mypassword
+    username: postgres
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: validate
+
+app:
+  base-url: "http://localhost:8080"
+  node-id: 01
+
