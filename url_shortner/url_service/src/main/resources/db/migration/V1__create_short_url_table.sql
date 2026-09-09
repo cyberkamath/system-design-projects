@@ -1,7 +1,0 @@
-CREATE TABLE short_url
-(
-    id BIGINT PRIMARY KEY,
-    original_url TEXT NOT NULL ,
-    code VARCHAR(20) NOT NULL UNIQUE,
-    created_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
