@@ -8,8 +8,11 @@ public class ShortCodeGenerator {
 
     private static final String BASE62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-    @Value("${app.node-id}")
-    private String nodeId;  // e.g., "01" from application.yml
+    private String nodeId;
+
+    public ShortCodeGenerator(@Value("${app.node-id}") String nodeId) {
+        this.nodeId = nodeId;
+    }
 
     private String encodeBase62(long value) {
         if (value == 0) return "0";
