@@ -18,32 +18,48 @@ Overview: A URL shortener supporting up to 10K URLs and 100K redirects/day in th
                 info: number of resolutions, time distribuition, referer
             
             probably batch job to do the analytics and pre fill the dashboard details
+
+    Database (postgres):
+    url service:
+        Own Postgres container on port 5432
+        Database: urlshortener
+        (existing tables)
+    analytics service:
+        Own Postgres container on port 5433
+        Database: analytics
+        (existing tables)
     Database (postgres) :
-        url service (url schema): 
-                table short_url - id serial or big int (primary key), original_url text, short_url varchar(10) (unique constraint), created_date timestamp
+        url service :
+            Own Postgres container on port 5432
+            Database: urlshortener
+            
+            table short_url - id serial or big int (primary key), original_url text, short_url varchar(10) (unique constraint), created_date timestamp
 
-                index on created_date and short_url
+            index on created_date and short_url
         
-        analytics service (analysis schema) : 
-                table records - id serial or big int, original_domain text, short_url varchar(10), ip_address INET ,resolver_node_id char(2), resolve_time_ms int, was_in_cache boolean , referer text, created_date timestamp
+        analytics service :
+            Own Postgres container on port 5433
+            Database: analytics 
+            
+            table records - id serial or big int, original_domain text, short_url varchar(10), ip_address INET ,resolver_node_id char(2), resolve_time_ms int, was_in_cache boolean , referer text, created_date timestamp
 
-                index on created_date and short_url
+            index on created_date and short_url
 
-                retention_days: 30
+            retention_days: 30
 
-                table per_url_resolve_count - 
-                    short_url varchar(10), hitcount bigint
+            table per_url_resolve_count - 
+                short_url varchar(10), hitcount bigint
                     
-                table per_referer_resolve_count - 
-                    referer_url text, hitcount bigint
+            table per_referer_resolve_count - 
+                referer_url text, hitcount bigint
                 
-                table per_domains_shortened_count - 
-                    original_domain text, hitcount bigint
+            table per_domains_shortened_count - 
+                original_domain text, hitcount bigint
 
-                table stats - 
-                    stat_name text, value text
-                        total_urls : count of urls shorteand
-                        total_resolves : total_resolution
+            table stats - 
+                stat_name text, value text
+                total_urls : count of urls shorteand
+                total_resolves : total_resolution
     Kafka : 
         event_shape: Json with code, timestamp, ip_address, useragent, referrer, resolver_node_id, was_in_cache, resolve_time_ms
 
