@@ -3,12 +3,16 @@ package sh.kamath.url_service.service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import sh.kamath.url_service.entity.ShortUrl;
+import sh.kamath.url_service.event.UrlClickedEvent;
 import sh.kamath.url_service.repository.UrlRepository;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 @Service
@@ -16,9 +20,15 @@ import java.util.Optional;
 @Slf4j
 public class UrlService {
 
+    @Value("${app.node-id}")
+    private String nodeId;
+
     private final UrlRepository urlRepository;
     private final ShortCodeGenerator shortCodeGenerator;
     private final StringRedisTemplate redisTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private static final String TOPIC = "url.clicked";
+
 
     private static final String CACHE_KEY_PREFIX = "url:";
     private static final Duration CACHE_TTL = Duration.ofHours(1);
@@ -36,23 +46,54 @@ public class UrlService {
         return urlRepository.save(shortUrl);
     }
 
-    public String resolve(String code) {
+    public Optional<String> resolve(String code) {
+        long startTime = System.currentTimeMillis();
         String cacheKey = CACHE_KEY_PREFIX + code;
+        boolean wasInCache;
+        Optional<String> resolvedUrl;
 
+        // 1. Check Redis
         String cachedUrl = redisTemplate.opsForValue().get(cacheKey);
-
-        if(cachedUrl != null){
-            log.debug("Cache HIT for code: {}", cacheKey);
-            return cachedUrl;
+        if (cachedUrl != null) {
+            log.debug("Cache HIT for code: {}", code);
+            wasInCache = true;
+            resolvedUrl = Optional.of(cachedUrl);
+        } else {
+            log.debug("Cache MISS for code: {}", code);
+            wasInCache = false;
+            resolvedUrl = urlRepository.findByCode(code)
+                    .map(ShortUrl::getOriginalUrl);
+            resolvedUrl.ifPresent(url ->
+                    redisTemplate.opsForValue().set(cacheKey, url, CACHE_TTL));
         }
 
-        log.debug("Cache Miss for code: {}",cacheKey);
+        // 2. Fire analytics event (only if URL was found — no analytics for 404s per your spec)
+        long resolveTimeMs = System.currentTimeMillis() - startTime;
+        resolvedUrl.ifPresent(url -> publishClickEvent(code, url, wasInCache, resolveTimeMs));
 
-        if(urlRepository.findByCode(code).isPresent()){
-            String resolvedUrl = urlRepository.findByCode(code).get().getOriginalUrl();
-            redisTemplate.opsForValue().set(cacheKey,resolvedUrl,CACHE_TTL);
-            return resolvedUrl;
-        }
-        else return null;
+        return resolvedUrl;
+    }
+
+    private void publishClickEvent(String code, String originalUrl, boolean wasInCache, long resolveTimeMs) {
+        UrlClickedEvent event = new UrlClickedEvent(
+                code,
+                originalUrl,
+                Instant.now(),
+                null,  // ipAddress - would need HttpServletRequest, deferred
+                null,  // userAgent - same
+                null,  // referrer - same
+                nodeId,
+                wasInCache,
+                resolveTimeMs
+        );
+
+        kafkaTemplate.send(TOPIC, code, event)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.warn("Failed to publish url.clicked event for code {}: {}", code, ex.getMessage());
+                    } else {
+                        log.debug("Published url.clicked event for code: {}", code);
+                    }
+                });
     }
 }

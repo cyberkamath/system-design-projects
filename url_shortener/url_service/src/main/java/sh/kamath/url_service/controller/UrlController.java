@@ -12,6 +12,7 @@ import sh.kamath.url_service.entity.ShortUrl;
 import sh.kamath.url_service.service.UrlService;
 
 import java.net.URI;
+import java.util.Optional;
 
 @RestController
 @RequiredArgsConstructor
@@ -34,16 +35,11 @@ public class UrlController {
     }
 
     @GetMapping("/{code}")
-    public ResponseEntity<Void> resolve(@PathVariable String code){
-
-        String resolvedUrl = urlService.resolve(code);
-        if(resolvedUrl == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(resolvedUrl))
-                .build();
-
+    public ResponseEntity<Void> resolve(@PathVariable String code) {
+        return urlService.resolve(code)
+                .<ResponseEntity<Void>>map(url -> ResponseEntity.status(HttpStatus.FOUND)
+                        .location(URI.create(url))
+                        .build())
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }
